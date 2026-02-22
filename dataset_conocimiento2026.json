@@ -1,0 +1,516 @@
+{
+  "meta": {
+    "project": "Simulador de Ingeniería del Conocimiento",
+    "domain_scope": "Diagnóstico de averías en baterías de estado sólido (SSB) en vehículos eléctricos",
+    "seed": "CONOCIMIENTO-2026",
+    "dataset_id": "dataset_conocimiento2026",
+    "version": "1.0.0",
+    "created_at": "2026-02-22",
+    "language": "es-MX",
+    "notes": [
+      "Este dataset está diseñado para el dominio SSB y NO para fallas generales del automóvil.",
+      "Incluye 5 reglas críticas (SSB_R1..SSB_R5) y 8 casos de prueba (SSB_T1..SSB_T8).",
+      "Los escenarios de adquisición están pensados para revelar conocimiento tácito (heurísticas) del experto simulado."
+    ]
+  },
+
+  "dominio": "SSB",
+
+  "expert_simulation": {
+    "expert_name": "Carlos",
+    "role": "Mecánico especialista en vehículos eléctricos",
+    "experience_years": 15,
+    "expertise_focus": [
+      "Baterías de estado sólido (SSB)",
+      "Degradación térmica",
+      "Fallas del electrolito sólido",
+      "Diagnóstico con BMS (SOC/SOH) y sensores térmicos"
+    ],
+    "interview_style": {
+      "principle": "Escenarios concretos para activar conocimiento tácito",
+      "avoid": "Preguntas abstractas que generan respuestas genéricas"
+    }
+  },
+
+  "vocabulario": {
+    "sintomas": [
+      "no_carga_mas_alla_80pct",
+      "carga_se_interrumpe",
+      "carga_lenta_inusual",
+      "carga_normal_pero_autonomia_reducida_abrup",
+      "autonomia_reducida_50pct",
+      "sin_cambios_conduccion",
+      "calentamiento_anormal_en_carga",
+      "hotspots_detectados",
+      "temperatura_dispareja_entre_modulos",
+      "proteccion_termica_activa_repetida",
+      "modo_potencia_limitada",
+      "voltaje_caida_bajo_aceleracion",
+      "sag_voltaje",
+      "desbalance_celdas_alto",
+      "voltajes_celda_incoherentes",
+      "lectura_temp_incoherente",
+      "sensor_temp_sospechoso",
+      "soh_cae_subitamente",
+      "soc_brinca_sin_sentido",
+      "bms_limita_corriente_sin_razon_aparente",
+      "autonomia_varia_mucho_entre_viajes",
+      "reinicios_bms_o_alertas_intermitentes",
+      "carga_rapida_reciente",
+      "uso_intenso_reciente",
+      "ambiente_frio",
+      "ambiente_caluroso"
+    ],
+    "diagnosticos": [
+      "ssb_interfase_degradada_por_hotspots",
+      "ssb_microgrietas_electrolito_por_ciclos_termicos",
+      "ssb_microcorto_interno_por_dendritas",
+      "bms_sensor_temp_descalibrado_limitacion_protectiva",
+      "bms_estimacion_soh_erronea_por_modelo_o_calibracion",
+      "ssb_desbalance_celdas_por_resistencia_interna_alta",
+      "diagnostico_no_posible"
+    ],
+    "reparaciones": [
+      "inspeccion_termica_y_mapeo_hotspots",
+      "recalibrar_o_reemplazar_sensor_temperatura",
+      "ejecutar_procedimiento_calibracion_soh_bms",
+      "balanceo_profundo_y_revision_modulos",
+      "reducir_carga_rapida_y_revisar_perfil_termico",
+      "inspeccion_interfases_y_reacondicionamiento_si_aplica",
+      "aislamiento_y_pruebas_seguridad_microcortos"
+    ],
+    "relaciones_permitidas": [
+      "causa",
+      "sintoma",
+      "requiere_reparacion"
+    ]
+  },
+
+  "reglas_criticas_ids": ["SSB_R1", "SSB_R2", "SSB_R3", "SSB_R4", "SSB_R5"],
+
+  "reglas_criticas": [
+    {
+      "id": "SSB_R1",
+      "nombre": "Degradación de interfase por hotspots (térmico)",
+      "condiciones": [
+        "calentamiento_anormal_en_carga",
+        "hotspots_detectados",
+        "modo_potencia_limitada"
+      ],
+      "conclusion": "ssb_interfase_degradada_por_hotspots",
+      "certeza": 0.86,
+      "explicacion_tecnica": "Hotspots repetidos aceleran degradación de interfases en SSB, elevan resistencia interna y provocan limitación de potencia por protección térmica.",
+      "explicacion_cliente": "Se detectaron puntos calientes al cargar; por seguridad el sistema baja la potencia. Eso suele pasar cuando partes internas de la batería ya no conducen igual.",
+      "requiere_reparacion": [
+        "inspeccion_termica_y_mapeo_hotspots",
+        "inspeccion_interfases_y_reacondicionamiento_si_aplica",
+        "reducir_carga_rapida_y_revisar_perfil_termico"
+      ],
+      "tipo_falla": "termica"
+    },
+    {
+      "id": "SSB_R2",
+      "nombre": "Microgrietas del electrolito sólido por ciclos térmicos",
+      "condiciones": [
+        "autonomia_varia_mucho_entre_viajes",
+        "temperatura_dispareja_entre_modulos",
+        "uso_intenso_reciente"
+      ],
+      "conclusion": "ssb_microgrietas_electrolito_por_ciclos_termicos",
+      "certeza": 0.82,
+      "explicacion_tecnica": "Ciclos térmicos y estrés mecánico interno pueden generar microgrietas en electrolito sólido, empeorando conducción iónica y variando desempeño por módulo.",
+      "explicacion_cliente": "El rendimiento cambia mucho y se siente irregular; puede ser porque internamente hay pequeñas fisuras que afectan cómo fluye la energía en la batería.",
+      "requiere_reparacion": [
+        "inspeccion_termica_y_mapeo_hotspots",
+        "balanceo_profundo_y_revision_modulos"
+      ],
+      "tipo_falla": "mecanica_estructural"
+    },
+    {
+      "id": "SSB_R3",
+      "nombre": "Microcorto interno por dendritas (riesgo de seguridad)",
+      "condiciones": [
+        "voltaje_caida_bajo_aceleracion",
+        "proteccion_termica_activa_repetida",
+        "carga_rapida_reciente"
+      ],
+      "conclusion": "ssb_microcorto_interno_por_dendritas",
+      "certeza": 0.88,
+      "explicacion_tecnica": "Bajo estrés (carga rápida/alta demanda) pueden formarse caminos conductores anómalos (dendritas) que causan microcortos, generando caídas de voltaje y eventos térmicos.",
+      "explicacion_cliente": "Después de carga rápida, al acelerar se siente una caída fuerte y el sistema entra en protección. Eso puede indicar un problema interno serio que debe revisarse por seguridad.",
+      "requiere_reparacion": [
+        "aislamiento_y_pruebas_seguridad_microcortos",
+        "inspeccion_termica_y_mapeo_hotspots"
+      ],
+      "tipo_falla": "electroquimica"
+    },
+    {
+      "id": "SSB_R4",
+      "nombre": "Sensor térmico descalibrado provoca limitación protectiva (falso positivo)",
+      "condiciones": [
+        "no_carga_mas_alla_80pct",
+        "lectura_temp_incoherente",
+        "bms_limita_corriente_sin_razon_aparente"
+      ],
+      "conclusion": "bms_sensor_temp_descalibrado_limitacion_protectiva",
+      "certeza": 0.79,
+      "explicacion_tecnica": "Un sensor de temperatura descalibrado puede hacer que el BMS crea que hay sobrecalentamiento y limite carga/corriente aunque la batería no esté realmente fuera de rango.",
+      "explicacion_cliente": "El coche deja de cargar (por ejemplo al 80%) porque el sistema cree que está caliente, pero las lecturas no cuadran. Puede ser un sensor, no la batería.",
+      "requiere_reparacion": [
+        "recalibrar_o_reemplazar_sensor_temperatura"
+      ],
+      "tipo_falla": "electronica_control"
+    },
+    {
+      "id": "SSB_R5",
+      "nombre": "Estimación SOH errónea (autonomía baja abrupta con carga normal)",
+      "condiciones": [
+        "carga_normal_pero_autonomia_reducida_abrup",
+        "soh_cae_subitamente",
+        "sin_cambios_conduccion"
+      ],
+      "conclusion": "bms_estimacion_soh_erronea_por_modelo_o_calibracion",
+      "certeza": 0.76,
+      "explicacion_tecnica": "Modelos/parametrización del BMS pueden subestimar SOH tras ciertos patrones, reduciendo autonomía estimada sin que exista degradación física proporcional.",
+      "explicacion_cliente": "Aunque carga normal, la autonomía bajó de golpe porque el sistema está calculando mal la salud de la batería. Puede corregirse con calibración.",
+      "requiere_reparacion": [
+        "ejecutar_procedimiento_calibracion_soh_bms"
+      ],
+      "tipo_falla": "electronica_control"
+    }
+  ],
+
+  "escenarios_adquisicion": [
+    {
+      "id": "SCN_01",
+      "contexto": "Después de cargar, el coche se calienta más de lo normal y entra en potencia limitada; el escáner térmico sugiere puntos calientes localizados.",
+      "preguntas_sugeridas": [
+        "¿Qué verificaría primero y por qué?",
+        "¿Qué indicaría la presencia de hotspots durante la carga?",
+        "¿Qué diferencia hay entre calentamiento general y hotspots localizados?"
+      ],
+      "respuesta_base": "Si hay hotspots y potencia limitada, priorizo revisar perfil térmico y posibles degradaciones de interfase: en SSB los hotspots aceleran resistencia interna y activan protecciones.",
+      "respuestas_por_keyword": {
+        "hotspot": "Hotspots sugieren zonas internas con mayor resistencia; en SSB eso suele estar ligado a interfases degradadas, no solo al ambiente.",
+        "primero": "Primero confirmo el patrón térmico y la repetición del evento; luego reviso si la limitación coincide con módulos específicos."
+      },
+      "regla_extraida": {
+        "id": "SSB_R1"
+      }
+    },
+    {
+      "id": "SCN_02",
+      "contexto": "Un usuario reporta que la autonomía varía mucho entre viajes similares; además, algunos módulos muestran temperaturas más altas que otros tras uso intenso.",
+      "preguntas_sugeridas": [
+        "¿Qué heurística usaría para decidir si es fallo físico o de control?",
+        "¿Qué puede causar variación grande entre viajes si el conductor no cambia hábitos?",
+        "¿Qué significa temperatura dispareja entre módulos?"
+      ],
+      "respuesta_base": "Temperaturas disparejas + variación fuerte sugieren heterogeneidad interna; en SSB puede haber microgrietas o delaminación que cambian la conducción iónica por módulo.",
+      "respuestas_por_keyword": {
+        "módulos": "Si un módulo se comporta distinto (temperatura/voltaje), indica resistencia interna diferente; eso orienta a daño estructural/electrolito.",
+        "físico": "Si el patrón se asocia a esfuerzo térmico, suele ser físico; si es aleatorio o inconsistente, puede ser sensado/BMS."
+      },
+      "regla_extraida": {
+        "id": "SSB_R2"
+      }
+    },
+    {
+      "id": "SCN_03",
+      "contexto": "Tras una carga rápida reciente, al acelerar se percibe caída de voltaje y el sistema activa protección térmica repetidas veces.",
+      "preguntas_sugeridas": [
+        "¿Qué causa consideraría más peligrosa y por qué?",
+        "¿Cómo distinguiría entre desbalance y microcorto interno?",
+        "¿Por qué la carga rápida puede empeorar este tipo de problema?"
+      ],
+      "respuesta_base": "Si hay caída de voltaje bajo demanda y protección térmica repetida tras carga rápida, considero microcorto interno (dendritas) como hipótesis de seguridad.",
+      "respuestas_por_keyword": {
+        "peligrosa": "Microcorto interno es prioridad por seguridad: puede generar calor localizado y eventos repetidos de protección.",
+        "carga rápida": "Aumenta estrés electroquímico y térmico; en algunos escenarios puede favorecer caminos conductores anómalos."
+      },
+      "regla_extraida": {
+        "id": "SSB_R3"
+      }
+    },
+    {
+      "id": "SCN_04",
+      "contexto": "El coche se niega a cargar más allá de 80% y el sistema muestra lecturas de temperatura incoherentes; el BMS limita corriente sin razón aparente.",
+      "preguntas_sugeridas": [
+        "¿Qué indicaría una lectura de temperatura incoherente?",
+        "¿Qué haría para confirmar si el problema es el sensor o la batería?",
+        "¿Por qué el BMS limitaría carga con una lectura errónea?"
+      ],
+      "respuesta_base": "Primero sospecho del sensor: si el BMS cree que hay sobretemperatura, limitará carga por protección aunque físicamente no exista.",
+      "respuestas_por_keyword": {
+        "sensor": "Un sensor descalibrado es típico: reporta temperaturas imposibles o inconsistentes vs otros sensores, y dispara protecciones.",
+        "confirmar": "Comparo sensores entre módulos, reviso coherencia y verifico si el patrón se repite con condiciones similares."
+      },
+      "regla_extraida": {
+        "id": "SSB_R4"
+      }
+    },
+    {
+      "id": "SCN_05",
+      "contexto": "La carga parece normal, pero la autonomía se reduce abruptamente; además, el SOH cae súbitamente sin cambios de conducción.",
+      "preguntas_sugeridas": [
+        "¿Por qué la autonomía podría bajar si la carga fue normal?",
+        "¿Qué significa una caída súbita de SOH?",
+        "¿Qué haría antes de concluir degradación física real?"
+      ],
+      "respuesta_base": "Ese patrón sugiere estimación errónea de SOH: el BMS puede recalcular y subestimar salud por modelo/calibración, reduciendo autonomía estimada.",
+      "respuestas_por_keyword": {
+        "soh": "Si SOH cae de golpe sin señales térmicas o eléctricas fuertes, sospecho recalibración/modelo más que daño físico instantáneo.",
+        "antes": "Primero reviso consistencia de mediciones y aplico calibración; después evalúo módulos si persiste."
+      },
+      "regla_extraida": {
+        "id": "SSB_R5"
+      }
+    }
+  ],
+
+  "casos_prueba": [
+    {
+      "id": "SSB_T1",
+      "descripcion": "Hotspots + calentamiento anormal en carga + potencia limitada",
+      "sintomas": [
+        "calentamiento_anormal_en_carga",
+        "hotspots_detectados",
+        "modo_potencia_limitada"
+      ],
+      "diagnostico_esperado": "ssb_interfase_degradada_por_hotspots",
+      "regla_esperada": "SSB_R1",
+      "criticidad": "alta",
+      "nota": "Caso típico de degradación térmica localizada."
+    },
+    {
+      "id": "SSB_T2",
+      "descripcion": "Variación fuerte de autonomía + temperatura dispareja tras uso intenso",
+      "sintomas": [
+        "autonomia_varia_mucho_entre_viajes",
+        "temperatura_dispareja_entre_modulos",
+        "uso_intenso_reciente"
+      ],
+      "diagnostico_esperado": "ssb_microgrietas_electrolito_por_ciclos_termicos",
+      "regla_esperada": "SSB_R2",
+      "criticidad": "media",
+      "nota": "Escenario coherente con microgrietas o contacto irregular por módulo."
+    },
+    {
+      "id": "SSB_T3",
+      "descripcion": "Tras carga rápida: caída de voltaje bajo aceleración + protección térmica repetida",
+      "sintomas": [
+        "carga_rapida_reciente",
+        "voltaje_caida_bajo_aceleracion",
+        "proteccion_termica_activa_repetida"
+      ],
+      "diagnostico_esperado": "ssb_microcorto_interno_por_dendritas",
+      "regla_esperada": "SSB_R3",
+      "criticidad": "critica",
+      "nota": "Caso de seguridad: priorizar diagnóstico de riesgo."
+    },
+    {
+      "id": "SSB_T4",
+      "descripcion": "No carga más allá de 80% + lecturas térmicas incoherentes + limitación de corriente",
+      "sintomas": [
+        "no_carga_mas_alla_80pct",
+        "lectura_temp_incoherente",
+        "bms_limita_corriente_sin_razon_aparente"
+      ],
+      "diagnostico_esperado": "bms_sensor_temp_descalibrado_limitacion_protectiva",
+      "regla_esperada": "SSB_R4",
+      "criticidad": "media",
+      "nota": "Caso límite típico de falso positivo por sensado."
+    },
+    {
+      "id": "SSB_T5",
+      "descripcion": "Carga normal pero autonomía reducida abrupta + SOH cae súbitamente sin cambios de conducción",
+      "sintomas": [
+        "carga_normal_pero_autonomia_reducida_abrup",
+        "soh_cae_subitamente",
+        "sin_cambios_conduccion"
+      ],
+      "diagnostico_esperado": "bms_estimacion_soh_erronea_por_modelo_o_calibracion",
+      "regla_esperada": "SSB_R5",
+      "criticidad": "media",
+      "nota": "Escenario límite obligatorio: autonomía baja abruptamente con carga normal."
+    },
+    {
+      "id": "SSB_T6",
+      "descripcion": "Desbalance alto + voltajes incoherentes + modo potencia limitada",
+      "sintomas": [
+        "desbalance_celdas_alto",
+        "voltajes_celda_incoherentes",
+        "modo_potencia_limitada"
+      ],
+      "diagnostico_esperado": "ssb_desbalance_celdas_por_resistencia_interna_alta",
+      "regla_esperada": null,
+      "criticidad": "media",
+      "nota": "Caso para ampliar conocimiento (no necesariamente cubierto por reglas críticas)."
+    },
+    {
+      "id": "SSB_T7",
+      "descripcion": "Carga se interrumpe + calentamiento anormal en carga + protección térmica repetida",
+      "sintomas": [
+        "carga_se_interrumpe",
+        "calentamiento_anormal_en_carga",
+        "proteccion_termica_activa_repetida"
+      ],
+      "diagnostico_esperado": "ssb_interfase_degradada_por_hotspots",
+      "regla_esperada": "SSB_R1",
+      "criticidad": "alta",
+      "nota": "Variante que debe seguir apuntando a degradación térmica (R1)."
+    },
+    {
+      "id": "SSB_T8",
+      "descripcion": "SOC brinca sin sentido + reinicios/alertas intermitentes + lecturas térmicas incoherentes",
+      "sintomas": [
+        "soc_brinca_sin_sentido",
+        "reinicios_bms_o_alertas_intermitentes",
+        "lectura_temp_incoherente"
+      ],
+      "diagnostico_esperado": "diagnostico_no_posible",
+      "regla_esperada": null,
+      "criticidad": "baja",
+      "nota": "Caso de brecha: sugiere conflicto/ruido de sensado o control; puede requerir más adquisición."
+    }
+  ],
+
+  "ontologia_inicial": {
+    "jerarquias": {
+      "Componentes": {
+        "Pack_bateria": {
+          "Modulos": {
+            "Celdas_SSB": {
+              "Anodo": {},
+              "Catodo": {},
+              "Electrolito_solido": {
+                "Tipo_sulfuro": {},
+                "Tipo_oxido": {},
+                "Tipo_polimero_compuesto": {}
+              },
+              "Interfases": {},
+              "Colectores_corriente": {},
+              "Sellado_celda": {}
+            }
+          },
+          "BMS": {
+            "Medicion": {},
+            "Estimacion_SOC_SOH": {},
+            "Balanceo": {},
+            "Protecciones": {}
+          },
+          "Sensores_pack": {
+            "Sensor_temperatura": {},
+            "Sensor_voltaje": {},
+            "Sensor_corriente": {}
+          },
+          "Gestion_termica": {
+            "Enfriamiento": {},
+            "Calefaccion": {}
+          }
+        }
+      },
+      "Tipos_de_falla": {
+        "Termicas": {
+          "Degradacion_interfase_hotspots": {},
+          "Hotspots_localizados": {}
+        },
+        "Mecanicas_estructurales": {
+          "Microgrietas_electrolito": {},
+          "Delaminacion": {},
+          "Contaminacion_humedad": {}
+        },
+        "Electroquimicas": {
+          "Microcorto_dendritas": {},
+          "Resistencia_interna_alta": {}
+        },
+        "Electronica_control": {
+          "Sensor_temp_descalibrado": {},
+          "Estimacion_SOH_erronea": {},
+          "Balanceo_defectuoso": {}
+        }
+      },
+      "Tipos_de_sintomas": {
+        "Durante_carga": {
+          "no_carga_mas_alla_80pct": {},
+          "carga_lenta_inusual": {},
+          "carga_se_interrumpe": {},
+          "calentamiento_anormal_en_carga": {}
+        },
+        "Durante_uso": {
+          "carga_normal_pero_autonomia_reducida_abrup": {},
+          "voltaje_caida_bajo_aceleracion": {},
+          "modo_potencia_limitada": {},
+          "proteccion_termica_activa_repetida": {}
+        },
+        "BMS_y_sensores": {
+          "lectura_temp_incoherente": {},
+          "soh_cae_subitamente": {},
+          "soc_brinca_sin_sentido": {},
+          "voltajes_celda_incoherentes": {}
+        }
+      }
+    },
+
+    "relaciones": [
+      {
+        "origen": "ssb_interfase_degradada_por_hotspots",
+        "relacion": "sintoma",
+        "destino": "hotspots_detectados"
+      },
+      {
+        "origen": "ssb_interfase_degradada_por_hotspots",
+        "relacion": "sintoma",
+        "destino": "calentamiento_anormal_en_carga"
+      },
+      {
+        "origen": "ssb_interfase_degradada_por_hotspots",
+        "relacion": "requiere_reparacion",
+        "destino": "inspeccion_termica_y_mapeo_hotspots"
+      },
+      {
+        "origen": "ssb_microgrietas_electrolito_por_ciclos_termicos",
+        "relacion": "sintoma",
+        "destino": "temperatura_dispareja_entre_modulos"
+      },
+      {
+        "origen": "ssb_microcorto_interno_por_dendritas",
+        "relacion": "sintoma",
+        "destino": "voltaje_caida_bajo_aceleracion"
+      },
+      {
+        "origen": "bms_sensor_temp_descalibrado_limitacion_protectiva",
+        "relacion": "sintoma",
+        "destino": "lectura_temp_incoherente"
+      },
+      {
+        "origen": "bms_estimacion_soh_erronea_por_modelo_o_calibracion",
+        "relacion": "sintoma",
+        "destino": "soh_cae_subitamente"
+      }
+    ],
+
+    "validacion_config": {
+      "no_permitir_ciclos_jerarquia": true,
+      "relaciones_permitidas": ["causa", "sintoma", "requiere_reparacion"],
+      "requerir_0_inconsistencias_para_aprobacion": true
+    }
+  },
+
+  "reporte_config": {
+    "objetivos_rubrica": {
+      "min_cobertura_reglas_criticas_pct": 70,
+      "min_precision_casos_prueba_pct": 80,
+      "inconsistencias_ontologia_permitidas": 0
+    },
+    "metricas": {
+      "calidad_explicacion": {
+        "cliente": ["diagnostico", "lenguaje_sencillo", "recomendacion_practica"],
+        "aprendiz": ["diagnostico", "reglas_aplicadas", "justificacion_tecnica"],
+        "experto": ["diagnostico", "traza_reglas", "detalle_maximo"]
+      }
+    }
+  },
+
+  "reglas_capturadas": []
+}
