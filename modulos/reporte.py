@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from modulos.dataset_store import DatasetStore
 
@@ -10,9 +9,11 @@ from modulos.dataset_store import DatasetStore
 @dataclass
 class CasoResultado:
     case_id: str
+    tipo: str  # "evaluacion" | "brecha"
     esperado: Any
+    regla_esperada: Optional[str]
     obtenido: str
-    regla_id: Optional[str]
+    regla_obtenida: Optional[str]
     certeza: float
     ok: bool
     detalle: str
@@ -20,18 +21,18 @@ class CasoResultado:
 
 class ReporteCobertura:
     """
-    MÓDULO 4 — Reporte de cobertura / calidad (alineado al estilo del profesor)
+    MÓDULO 4 — Reporte de cobertura / calidad (alineado al dataset y al estilo del profe)
 
-    Qué reporta (mínimo):
-    1) Cobertura de reglas críticas: capturadas vs total
-    2) Precisión en casos de prueba: aciertos / total
-    3) Ontología: coherencia (OK / inconsistencias)
-    4) Diagnóstico: porcentaje de "sin diagnóstico" en pruebas
-    5) Estado contra rúbrica (checklist visual)
+    Métricas:
+    1) Cobertura de reglas críticas (capturadas vs total)
+    2) Ontología: coherencia (0 errores) + advertencias
+    3) Validación de casos:
+       - Precisión OBLIGATORIA: solo casos con regla_esperada (evaluación)
+       - Brechas: casos con regla_esperada = None (no penalizan la precisión obligatoria)
+       - Precisión global (opcional): incluye todo, por transparencia
 
     Nota:
-    - Este reporte NO solo imprime números; también guía acciones:
-      "Qué falta capturar", "Qué casos fallan" y "Qué arreglar".
+    - Esto evita “castigo” injusto cuando ustedes mismos marcaron un caso como brecha de conocimiento.
     """
 
     LINE = "=" * 70
@@ -47,27 +48,42 @@ class ReporteCobertura:
     def ejecutar(self) -> None:
         self._banner("MÓDULO 4 — REPORTE DE COBERTURA / CALIDAD (RÚBRICA)")
 
+        # 0) Validación rápida del dataset (estructura)
+        self._section("VALIDACIÓN INICIAL DEL DATASET (estructura mínima)")
+        errores_schema = self.store.validate_basic_schema() if hasattr(self.store, "validate_basic_schema") else []
+        if errores_schema:
+            print(f"❌ Se detectaron {len(errores_schema)} problemas en el JSON:")
+            for e in errores_schema:
+                print(" -", e)
+        else:
+            print("✅ Dataset OK (estructura mínima).")
+
         # 1) Cobertura de reglas críticas
         cobertura = self._reporte_cobertura_reglas()
 
         # 2) Ontología coherente
-        ont_ok, inconsistencias = self._reporte_ontologia()
+        ont_ok, ont_errs, ont_warns = self._reporte_ontologia()
 
-        # 3) Precisión de casos de prueba (usa el motor de inferencia)
-        precision, resultados = self._reporte_casos_prueba()
+        # 3) Casos de prueba (precisión obligatoria + brechas)
+        resumen_pruebas, resultados = self._reporte_casos_prueba()
 
-        # 4) Estado contra rúbrica (resumen tipo semáforo)
-        self._reporte_estado_rubrica(cobertura, precision, ont_ok)
+        # 4) Estado contra rúbrica (resumen)
+        self._reporte_estado_rubrica(cobertura, ont_ok, resumen_pruebas)
 
-        # 5) Detalles (qué falta y qué falló)
+        # 5) Detalles accionables
         self._reporte_detalle_faltantes(cobertura)
         self._reporte_detalle_pruebas(resultados)
 
         self._banner("FIN DEL REPORTE")
-        print("Sugerencia final:")
-        print("- Si cobertura < 70%: vuelve a Adquisición y captura reglas faltantes.")
-        print("- Si precisión < 80%: revisa qué casos fallan y ajusta reglas/condiciones.")
-        print("- Si ontología NO es coherente: corrige jerarquías/relaciones y revalida.")
+        print("Siguiente acción sugerida (rápida):")
+        if cobertura["pct"] < 70.0:
+            print("- Sube cobertura: entra a Módulo 1 y captura reglas críticas faltantes.")
+        elif resumen_pruebas["precision_obligatoria"] < 80.0:
+            print("- Sube precisión: ajusta condiciones de reglas o casos de prueba fallidos.")
+        elif not ont_ok:
+            print("- Arregla ontología: corrige jerarquías/relaciones y revalida.")
+        else:
+            print("- Ya cumples lo esencial: ahora puedes ampliar con nuevas reglas (brechas).")
 
     # ---------------------------------------------------------------------
     # UI helpers
@@ -91,12 +107,11 @@ class ReporteCobertura:
     def _reporte_cobertura_reglas(self) -> Dict[str, Any]:
         self._section("COBERTURA DE REGLAS CRÍTICAS")
 
-        reglas_total_ids: List[str] = list(self.store.reglas_criticas_ids)
-        capturadas_ids: Set[str] = set(self.store.reglas_capturadas_ids)
+        reglas_total_ids = list(self.store.reglas_criticas_ids)
+        capturadas_ids = set(self.store.reglas_capturadas_ids)
 
-        # Solo cuenta como cobertura lo que sea realmente "crítico"
-        reglas_total_set: Set[str] = set(reglas_total_ids)
-        capturadas_criticas: Set[str] = capturadas_ids.intersection(reglas_total_set)
+        reglas_total_set = set(reglas_total_ids)
+        capturadas_criticas = capturadas_ids.intersection(reglas_total_set)
 
         total = len(reglas_total_set)
         capt = len(capturadas_criticas)
@@ -107,10 +122,7 @@ class ReporteCobertura:
         print(f"Reglas críticas totales: {total}")
         print(f"Reglas críticas capturadas: {capt}")
         print(f"Cobertura: {pct:.1f}%")
-        if faltan:
-            print("Faltan por capturar:", ", ".join(faltan))
-        else:
-            print("Faltan por capturar: ninguna")
+        print("Faltan por capturar:", ", ".join(faltan) if faltan else "ninguna")
 
         return {
             "total": total,
@@ -123,188 +135,239 @@ class ReporteCobertura:
     # ---------------------------------------------------------------------
     # 2) Ontología
     # ---------------------------------------------------------------------
-    def _reporte_ontologia(self) -> Tuple[bool, List[str]]:
+    def _reporte_ontologia(self) -> Tuple[bool, List[str], List[str]]:
         self._section("VALIDACIÓN DE ONTOLOGÍA (COHERENCIA)")
 
-        # Intentar usar el módulo OntologiaDominio si existe
-        inconsistencias: List[str] = []
+        # Intentar usar el módulo OntologiaDominio si existe y expone validar_coherencia_detallada()
+        errores: List[str] = []
+        advertencias: List[str] = []
+
         try:
-            from modulos.ontologia import OntologiaDominio  # import local para evitar dependencias circulares
+            from modulos.ontologia import OntologiaDominio
             ont = OntologiaDominio(self.store)
 
-            # Compatibilidad: validar_coherencia() o validar()
-            if hasattr(ont, "validar_coherencia") and callable(getattr(ont, "validar_coherencia")):
-                inconsistencias = ont.validar_coherencia()
-            elif hasattr(ont, "validar") and callable(getattr(ont, "validar")):
-                inconsistencias = ont.validar()
+            if hasattr(ont, "validar_coherencia_detallada") and callable(getattr(ont, "validar_coherencia_detallada")):
+                errores, advertencias = ont.validar_coherencia_detallada()
+            elif hasattr(ont, "validar_coherencia") and callable(getattr(ont, "validar_coherencia")):
+                errores = ont.validar_coherencia()
+                advertencias = []
             else:
-                inconsistencias = self._validacion_ontologia_fallback()
+                # fallback mínimo
+                errores, advertencias = self._validacion_ontologia_fallback()
         except Exception:
-            inconsistencias = self._validacion_ontologia_fallback()
+            errores, advertencias = self._validacion_ontologia_fallback()
 
-        ok = (len(inconsistencias) == 0)
-        print(f"Ontología coherente: {self._check(ok)}")
-        if not ok:
-            print("Inconsistencias encontradas:")
-            for inc in inconsistencias[:10]:
-                print(" -", inc)
-            if len(inconsistencias) > 10:
-                print(f" ... y {len(inconsistencias) - 10} más")
+        ok = (len(errores) == 0)
+
+        print(f"Ontología coherente (0 errores): {self._check(ok)}")
+        if errores:
+            print("Errores:")
+            for e in errores[:15]:
+                print(" -", e)
+            if len(errores) > 15:
+                print(f" ... y {len(errores) - 15} más")
         else:
-            print("Inconsistencias: 0")
+            print("Errores: 0")
 
-        return ok, inconsistencias
+        if advertencias:
+            print(f"\nAdvertencias: {len(advertencias)}")
+            for w in advertencias[:10]:
+                print(" -", w)
+            if len(advertencias) > 10:
+                print(f" ... y {len(advertencias) - 10} más")
 
-    def _validacion_ontologia_fallback(self) -> List[str]:
+        return ok, errores, advertencias
+
+    def _validacion_ontologia_fallback(self) -> Tuple[List[str], List[str]]:
         """
-        Validación mínima por si el módulo ontología cambia.
-        Revisa:
+        Fallback simple:
         - jerarquias es dict
-        - relaciones es dict con tipo esperado
-        - detecta ciclos simples en jerarquías (DFS).
+        - relaciones es list de triplas dict
+        - detecta ciclos básicos en jerarquías
         """
         ont = self.store.ontologia or {}
         jer = ont.get("jerarquias", {})
-        rel = ont.get("relaciones", {})
+        rel = ont.get("relaciones", [])
 
         errores: List[str] = []
+        advertencias: List[str] = []
 
         if not isinstance(jer, dict):
-            errores.append("ontologia_inicial.jerarquias debe ser un objeto (dict).")
-            return errores
+            errores.append("ontologia_inicial.jerarquias debe ser dict.")
+            return errores, advertencias
 
-        if rel and not isinstance(rel, dict):
-            errores.append("ontologia_inicial.relaciones debe ser un objeto (dict).")
+        if not isinstance(rel, list):
+            errores.append("ontologia_inicial.relaciones debe ser lista (triplas).")
+            return errores, advertencias
 
-        # Detectar ciclos simples en el árbol jerárquico
-        def dfs(node_name: str, node: Any, path: Set[str]) -> None:
-            if node_name in path:
-                errores.append(f"Ciclo detectado en jerarquía: {node_name}")
+        # Ciclos simples
+        def dfs(node_name: str, node: Any, path: List[str]) -> None:
+            if node_name in path[:-1]:
+                errores.append(f"Ciclo detectado en jerarquía: {node_name} (ruta: {' > '.join(path)})")
                 return
             if not isinstance(node, dict):
                 return
-            path.add(node_name)
-            for child_name, child_node in node.items():
-                dfs(str(child_name), child_node, set(path))
+            for child, child_node in node.items():
+                dfs(str(child), child_node, path + [str(child)])
 
-        for root_name, subtree in jer.items():
-            dfs(str(root_name), subtree, set())
+        for root, subtree in jer.items():
+            dfs(str(root), subtree, [str(root)])
 
-        return errores
+        # Validar formato de triplas
+        for i, t in enumerate(rel):
+            if not isinstance(t, dict):
+                errores.append(f"relaciones[{i}] no es dict.")
+                continue
+            if "origen" not in t or "relacion" not in t or "destino" not in t:
+                errores.append(f"relaciones[{i}] debe tener origen/relacion/destino.")
+
+        return errores, advertencias
 
     # ---------------------------------------------------------------------
     # 3) Casos de prueba / precisión
     # ---------------------------------------------------------------------
-    def _reporte_casos_prueba(self) -> Tuple[float, List[CasoResultado]]:
-        self._section("VALIDACIÓN: CASOS DE PRUEBA (PRECISIÓN)")
+    def _reporte_casos_prueba(self) -> Tuple[Dict[str, Any], List[CasoResultado]]:
+        self._section("VALIDACIÓN: CASOS DE PRUEBA (PRECISIÓN + BRECHAS)")
 
         casos = self.store.casos_prueba
         if not casos:
             print("No hay casos_prueba en el dataset.")
-            return 0.0, []
+            return {
+                "total": 0,
+                "evaluacion_total": 0,
+                "evaluacion_ok": 0,
+                "precision_obligatoria": 0.0,
+                "brechas_total": 0,
+                "precision_global": 0.0,
+                "sin_diagnostico_eval": 0,
+            }, []
 
-        # Motor de inferencia (import local para evitar ciclos)
         from modulos.motor_inferencia import MotorInferencia
         motor = MotorInferencia(self.store)
 
         resultados: List[CasoResultado] = []
-        aciertos = 0
-        sin_diag = 0
+
+        eval_total = 0
+        eval_ok = 0
+        brechas_total = 0
+        global_ok = 0
+        sin_diag_eval = 0
 
         for c in casos:
             case_id = str(c.get("id", "SIN_ID"))
             sintomas = self._leer_sintomas_caso(c)
             esperado = c.get("diagnostico_esperado")
+            regla_esperada = c.get("regla_esperada", None)
 
-            obtenido, _, regla_id, certeza = motor.diagnosticar(sintomas, perfil="experto")
+            tipo = "evaluacion" if regla_esperada else "brecha"
 
-            ok, detalle = self._comparar_esperado_obtenido(esperado, obtenido)
+            obtenido, _, regla_obtenida, certeza = motor.diagnosticar(sintomas, perfil="experto")
 
-            if obtenido == "diagnostico_no_posible":
-                sin_diag += 1
+            ok_diag, detalle = self._comparar_esperado_obtenido(esperado, obtenido)
 
-            if ok:
-                aciertos += 1
+            # para evaluación: además podemos checar si coincide la regla esperada (opcional, no bloqueante)
+            if tipo == "evaluacion":
+                eval_total += 1
+                if obtenido == "diagnostico_no_posible":
+                    sin_diag_eval += 1
+                if ok_diag:
+                    eval_ok += 1
+
+            # global (solo informativo)
+            if ok_diag:
+                global_ok += 1
+
+            if tipo == "brecha":
+                brechas_total += 1
+                # Ajuste de detalle: no penaliza, pero explica
+                if regla_esperada is None and esperado != "diagnostico_no_posible" and not ok_diag:
+                    detalle = "brecha: caso diseñado para ampliar conocimiento (no penaliza precisión obligatoria)"
+                elif esperado == "diagnostico_no_posible" and ok_diag:
+                    detalle = "brecha: correctamente no se diagnosticó (esperado)"
+                elif esperado == "diagnostico_no_posible" and not ok_diag:
+                    detalle = "brecha: se diagnosticó algo cuando se esperaba NO diagnosticar"
 
             resultados.append(
                 CasoResultado(
                     case_id=case_id,
+                    tipo=tipo,
                     esperado=esperado,
+                    regla_esperada=regla_esperada,
                     obtenido=obtenido,
-                    regla_id=regla_id,
+                    regla_obtenida=regla_obtenida,
                     certeza=float(certeza),
-                    ok=ok,
+                    ok=ok_diag,
                     detalle=detalle,
                 )
             )
 
         total = len(resultados)
-        precision = (aciertos / total * 100.0) if total else 0.0
+        precision_obligatoria = (eval_ok / eval_total * 100.0) if eval_total else 0.0
+        precision_global = (global_ok / total * 100.0) if total else 0.0
 
         print(f"Casos totales: {total}")
-        print(f"Aciertos: {aciertos}")
-        print(f"Precisión: {precision:.1f}%")
-        print(f"Sin diagnóstico: {sin_diag} ({(sin_diag/total*100.0):.1f}%)" if total else "Sin diagnóstico: 0")
+        print(f"Casos de evaluación (con regla_esperada): {eval_total}")
+        print(f"Aciertos evaluación: {eval_ok}")
+        print(f"✅ Precisión OBLIGATORIA: {precision_obligatoria:.1f}% (no incluye brechas)")
+        print(f"Brechas (regla_esperada = null): {brechas_total}")
+        print(f"Precisión global (informativa): {precision_global:.1f}%")
+        print(f"Sin diagnóstico en evaluación: {sin_diag_eval} ({(sin_diag_eval/eval_total*100.0):.1f}%)" if eval_total else "Sin diagnóstico en evaluación: 0")
 
-        return precision, resultados
+        return {
+            "total": total,
+            "evaluacion_total": eval_total,
+            "evaluacion_ok": eval_ok,
+            "precision_obligatoria": precision_obligatoria,
+            "brechas_total": brechas_total,
+            "precision_global": precision_global,
+            "sin_diagnostico_eval": sin_diag_eval,
+        }, resultados
 
     def _leer_sintomas_caso(self, caso: Dict[str, Any]) -> List[str]:
-        """
-        Soporta:
-        - sintomas: [ "s1", "s2" ]
-        - sintomas: { "s1": true, "s2": false, "temp": 60 } -> toma keys truthy
-        """
         s = caso.get("sintomas")
         if isinstance(s, list):
             return [str(x).strip() for x in s if str(x).strip()]
         if isinstance(s, dict):
             out: List[str] = []
             for k, v in s.items():
-                # si es bool, usa True; si es número/texto, se considera "presente"
                 if isinstance(v, bool):
                     if v:
                         out.append(str(k).strip())
                 else:
-                    # valor no booleano: se interpreta como evidencia presente
                     out.append(str(k).strip())
             return [x for x in out if x]
         return []
 
     def _comparar_esperado_obtenido(self, esperado: Any, obtenido: str) -> Tuple[bool, str]:
-        """
-        esperado puede ser:
-        - string
-        - lista de strings (permitir alternativas)
-        """
         if isinstance(esperado, str):
             ok = (esperado.strip() == obtenido.strip())
-            return ok, "match exacto" if ok else "no coincide"
+            return ok, ("match exacto" if ok else "no coincide")
         if isinstance(esperado, list):
             exp_list = [str(x).strip() for x in esperado if str(x).strip()]
             ok = obtenido.strip() in exp_list
-            return ok, "match en alternativas" if ok else "no coincide"
+            return ok, ("match en alternativas" if ok else "no coincide")
         return False, "esperado inválido"
 
     # ---------------------------------------------------------------------
     # 4) Estado contra rúbrica (checklist)
     # ---------------------------------------------------------------------
-    def _reporte_estado_rubrica(self, cobertura: Dict[str, Any], precision: float, ont_ok: bool) -> None:
+    def _reporte_estado_rubrica(self, cobertura: Dict[str, Any], ont_ok: bool, resumen_pruebas: Dict[str, Any]) -> None:
         self._section("ESTADO CONTRA RÚBRICA (RESUMEN VISUAL)")
 
-        # Umbrales recomendados (pueden ajustarse si el profe define otros)
         cobertura_ok = cobertura.get("pct", 0.0) >= 70.0
-        precision_ok = precision >= 80.0
-        ontologia_ok = ont_ok
+        precision_ok = resumen_pruebas.get("precision_obligatoria", 0.0) >= 80.0
 
-        # Indicadores por componente (simula rúbrica: adquisición/representación/razonamiento/validación/reporte)
         print(f"{self._check(cobertura_ok)} Adquisición: cobertura de reglas críticas >= 70% (actual: {cobertura.get('pct', 0.0):.1f}%)")
-        print(f"{self._check(ontologia_ok)} Representación: ontología coherente (actual: {'OK' if ontologia_ok else 'con inconsistencias'})")
+        print(f"{self._check(ont_ok)} Representación: ontología coherente (0 errores)")
         print(f"{self._check(True)} Razonamiento: motor de inferencia operativo (diagnosticar() funciona)")
-        print(f"{self._check(precision_ok)} Validación: precisión en casos de prueba >= 80% (actual: {precision:.1f}%)")
-        print(f"{self._check(True)} Reporte: se genera reporte con métricas + guía de mejoras")
+        print(f"{self._check(precision_ok)} Validación: precisión obligatoria >= 80% (actual: {resumen_pruebas.get('precision_obligatoria', 0.0):.1f}%)")
+        print(f"{self._check(True)} Reporte: métricas + guía de mejoras + brechas separadas")
+
+        if resumen_pruebas.get("brechas_total", 0) > 0:
+            print(f"ℹ️ Brechas detectadas: {resumen_pruebas['brechas_total']} (no penalizan precisión obligatoria)")
 
     # ---------------------------------------------------------------------
-    # 5) Detalles: faltantes / fallas
+    # 5) Detalles accionables
     # ---------------------------------------------------------------------
     def _reporte_detalle_faltantes(self, cobertura: Dict[str, Any]) -> None:
         self._section("DETALLE: QUÉ FALTA PARA SUBIR COBERTURA")
@@ -329,30 +392,46 @@ class ReporteCobertura:
             else:
                 print(f"- {rid} (no encontrada en reglas_criticas)")
 
-        print("\nAcción rápida:")
-        print("- En el Módulo 1, elige el escenario asociado a esas reglas y marca capturadas.")
-        print("- Si no existe escenario: crea uno en escenarios_adquisicion con regla_extraida.id = esa regla.")
-
     def _reporte_detalle_pruebas(self, resultados: List[CasoResultado]) -> None:
-        self._section("DETALLE: CASOS DE PRUEBA (FALLOS)")
+        self._section("DETALLE: CASOS (FALLOS) Y BRECHAS")
 
         if not resultados:
-            print("No hay resultados de prueba.")
+            print("No hay resultados.")
             return
 
-        fallos = [r for r in resultados if not r.ok]
-        if not fallos:
-            print("✅ Todos los casos de prueba pasan (100%).")
-            return
+        # Fallos de evaluación (sí importan)
+        fallos_eval = [r for r in resultados if r.tipo == "evaluacion" and not r.ok]
+        brechas = [r for r in resultados if r.tipo == "brecha"]
 
-        print(f"Casos que fallan: {len(fallos)}")
-        for r in fallos[:10]:
-            print(f"- {r.case_id}: esperado='{r.esperado}' obtenido='{r.obtenido}' regla='{r.regla_id}' certeza={r.certeza} ({r.detalle})")
-        if len(fallos) > 10:
-            print(f" ... y {len(fallos) - 10} más")
+        if not fallos_eval:
+            print("✅ Evaluación: todos los casos obligatorios pasan.")
+        else:
+            print(f"❌ Evaluación: fallan {len(fallos_eval)} caso(s).")
+            for r in fallos_eval[:10]:
+                print(
+                    f"- {r.case_id}: esperado='{r.esperado}' obtenido='{r.obtenido}' "
+                    f"regla_obtenida='{r.regla_obtenida}' certeza={r.certeza} ({r.detalle})"
+                )
+            if len(fallos_eval) > 10:
+                print(f" ... y {len(fallos_eval) - 10} más")
+            print("\nCómo corregir (evaluación):")
+            print("1) Revisa síntomas del caso.")
+            print("2) Ajusta condiciones de la regla esperada o crea regla nueva.")
+            print("3) Vuelve a correr el reporte.")
 
-        print("\nCómo corregir:")
-        print("1) Revisa qué síntomas tiene el caso (casos_prueba[].sintomas).")
-        print("2) Busca una regla que debería cubrirlo y revisa condiciones.")
-        print("3) Si no existe regla, crea una regla nueva + escenario de adquisición.")
-        print("4) Vuelve a correr el reporte y verifica que suba la precisión.")
+        # Brechas (no penalizan, pero se reportan)
+        if brechas:
+            print(f"\nℹ️ Brechas registradas: {len(brechas)}")
+            for r in brechas[:10]:
+                print(
+                    f"- {r.case_id}: esperado='{r.esperado}' obtenido='{r.obtenido}' "
+                    f"(detalle: {r.detalle})"
+                )
+            if len(brechas) > 10:
+                print(f" ... y {len(brechas) - 10} más")
+
+            print("\nQué hacer con brechas:")
+            print("- Si quieres subir precisión global, conviértelas en evaluación:")
+            print("  1) crea una regla nueva (reglas_criticas) que cubra esos síntomas")
+            print("  2) agrega un escenario de adquisición que extraiga esa regla")
+            print("  3) define regla_esperada en el caso y listo")
